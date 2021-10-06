@@ -2,7 +2,7 @@
 title: "practical_exercise_3, Methods 3, 2021, autumn semester"
 author: 'Alina Kereszt'
 date: "29.09.2021"
-output: pdf_document
+output: html_document
 ---
 
 <style type="text/css">
@@ -32,7 +32,7 @@ Go to https://osf.io/ecxsj/files/ and download the files associated with Experim
 The data is associated with Experiment 2 of the article at the following DOI https://doi.org/10.1016/j.concog.2019.03.007  
 
 1) Put the data from all subjects into a single data frame  
-```{r}
+```{r, results = 'hide', warning = FALSE, error = FALSE, message = FALSE}
 df <-
     list.files(pattern = "*.csv") %>% 
     map_df(~read_csv(.))
@@ -86,8 +86,8 @@ for (i in 1:29) {
   loopdf <- loopdf %>%
     mutate(inv = inv.logit(loopmodel$fitted.values)) #get the inverse logit of the fitted values
   plot <- ggplot(loopdf, aes(x = target.contrast, y = inv)) +
-    geom_point(aes(color = 'red')) +
-    scale_color_manual(labels = c("No-pool function"), values = c("red")) +
+    geom_point(aes(color = "coral1")) +
+    scale_color_manual(labels = c("No-pool function"), values = c("coral1")) +
     guides(color=guide_legend("Functions")) + 
     labs(title = "Estimated function for the participant", x = "Target contrast", y = "Probability of correct answer") #plot the thus estimated function
   print(plot) #actually get the plot to show up
@@ -110,9 +110,9 @@ for (i in 1:29) {
     mutate(inv = inv.logit(loopmodel$fitted.values))
   #now for overlaying the pooled function
   plot <- ggplot(loopdf, aes(x = target.contrast, y = inv)) +
-    geom_point(aes(y = inv, color = 'red')) +
-    geom_point(aes(y = pooled_inv, color = 'blue')) +
-    scale_color_manual(labels = c("Partial-pooling function", "No-pool function"), values = c("blue", "red")) +
+    geom_point(aes(y = inv, color = "coral1")) +
+    geom_point(aes(y = pooled_inv, color = "cornflowerblue")) +
+    scale_color_manual(labels = c("Partial-pooling function", "No-pool function"), values = c("cornflowerblue", "coral1")) +
     guides(color=guide_legend("Functions")) + 
     labs(title = "Estimated functions for the participant", x = "Target contrast", y = "Probability of correct answer") #plot the thus estimated function
   print(plot) #actually get the plot to show up
@@ -188,6 +188,9 @@ qqline(residuals(log.int020))
     The residuals appear significantly more normal after log-transformation, being skewed to a much smaller extent.
 2) Now do a partial pooling model modeling objective response times as dependent on _task_. (set `REML=FALSE` in your `lmer`-specification) 
 ```{r}
+#Why REML = FALSE? 
+#It’s generally good to use REML, if it is available, when you are interested in the magnitude of the random effects variances, but never when you are comparing models with different fixed effects via hypothesis tests or information-theoretic criteria such as AIC.
+
 # Build models
 model_2.1 <- lmerTest::lmer(rt.obj ~ task + (1 | subject), data = exp, REML = FALSE)
 model_2.2 <- lmerTest::lmer(rt.obj ~ task + (1 + pas | subject), data = exp, REML = FALSE)
@@ -310,13 +313,32 @@ poisson
     An increase in probability for so rating a trial is shown for all interactions moving along the PAS scale for "singles" tasks (~21.57%, ~27.51% and ~75.67%, respectively), while a decrease can be noted for "quadruplets" tasks (~10.75%, ~18.85%, ~19.35% respectively).
     All main and interaction effects are significant, p < .05, with the exception of moving from PAS rating 1 to PAS rating 2.
     vii. include a plot that shows the estimated amount of ratings for four subjects of your choosing.
+```{r}
+# When making predictions from a regression model, we can make either in-sample or out-of-sample predictions.
+# When making in-sample predictions, we basically obtain the predicted values for the y axis based on the existing values on the x axis; i.e. the value on y if there was no error. These are the fitted values.
+# Since we are trying to estimate ratings for subjects already in the dataset, we make in-sample predictions.
+
+#Extract the fitted values
+data.count$fitted <- fitted(model_3.2)
+
+#Select subjects
+df_3.2 <- data.count %>% 
+  filter(subject == '1' | subject == '5' | subject == '16' | subject == '20')
+
+ggplot(data = df_3.2, aes(x = pas, y = fitted, fill = task)) +
+  geom_col(width = 0.75) +
+  facet_wrap(~subject) +
+  labs(title = "Predicted amount of PAS ratings per task for 4 subjects", x = "PAS rating", y = "Number of ratings") +
+  scale_fill_manual(labels = c("Pairs", "Quadruplets", "Singles"), values = c("aquamarine3", "cornflowerblue", "coral1")) +
+  guides(color = guide_legend("Task")) + 
+  theme_minimal()
+```
 3) Finally, fit a multilevel model that models _correct_ as dependent on _task_ with a unique intercept for each _subject_
 ```{r}
 model_3.3a <- glmer(correct ~ task + (1 | subject), family = 'binomial', data = df)
 summary(model_3.3a)
 ```
     i. does _task_ explain performance?  
-    
     ii. add _pas_ as a main effect on top of _task_ - what are the consequences of that?  
 ```{r}
 model_3.3b <- glmer(correct ~ task + pas + (1 | subject), family = 'binomial', data = df)
@@ -342,7 +364,7 @@ c(var(residuals(model_3.3a)),
 )
 
 #AIC
-AIC(model_3.3a, model_3.3b, model_3.3c, model_3.3d, test = 'LR')
+anova(model_3.3a, model_3.3b, model_3.3c, model_3.3d, test = 'LR')
 ```
 _model_3.3c_ appears to be the most suitable model. It has the lowest residual variance and AIC, and the addition of multiple main effects or of interaction effects did not significantly improve the model's performance. PAS seems to account for most of the variance in the dataset.  
 
