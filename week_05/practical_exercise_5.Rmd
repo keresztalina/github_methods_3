@@ -14,7 +14,7 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 setwd("~/GitHub/Coding/Methods 3/week_05")
-pacman::p_load(tidyverse, lme4, MuMIn, boot)
+pacman::p_load(tidyverse, lme4, MuMIn, boot, multcomp)
 ```
 
 # Exercises and objectives
@@ -166,8 +166,8 @@ model_5.2b <- glmer(correct ~ 1 + (1 | subject),
                     data = df)
 model_5.2c <- glmer(correct ~ target.frames + (1 | subject), 
                     family = 'binomial', 
-                    data = df)
-model_5.2d <- glmer(correct ~ target.frames + (target.frames | subject), 
+                    data = df) #group-level effect = fixed effect:)
+model_5.2d <- glmer(correct ~ target.frames + (1 + target.frames | subject), 
                     family = 'binomial', 
                     data = df)
 
@@ -177,9 +177,17 @@ c(logLik(model_5.2a),
   logLik(model_5.2d)
 )
 
-anova(model_5.2d, model_5.2c, model_5.2b, model_5.2a) #WHY DOES THIS ONLY WORK WHEN I PUT IN THE MODELS IN THE WRONG ORDER????????????
+anova(model_5.2d, model_5.2c, model_5.2b, model_5.2a)
 ```
     i. write a short methods section and a results section where you indicate which model you chose and the statistics relevant for that choice. Include a plot of the estimated group-level function with `xlim=c(0, 8)` that includes the estimated subject-specific functions.
+    We chose model_5.2d in order to best describe the probability of obtaining a correct answer in the task when taking into account the number of target frames presented, as well as unique intercepts by subject and unique slopes by target frames presented:
+    _correct ~ target.frames + (1 + target.frames | subject)_
+    The chosen model performs better than the other models in terms of AIC scores. When conducting a likelihood ratio test, we found the added complexity to significantly improve log-likelihood scores (χ² (2) = 346.41, p < .001). 
+```{r}
+summary(model_5.2d)
+inv.logit(0.83316)
+```
+    Accuracy is found to be significantly modulated by the number of target frames (beta = 0.83316, SE = 0.04432, p < .001); with each increase in the number of target frames, the probability of a correct answer increases by 69.7%.
 ```{r}
 df <- cbind(df, fitted = fitted(model_5.2d), probabilities = inv.logit(fitted(model_5.2d)))
 ggplot(df, aes(x = target.frames, y = probabilities, color = subject)) + 
@@ -190,7 +198,17 @@ ggplot(df, aes(x = target.frames, y = probabilities, color = subject)) +
        title = "Estimated function by subject") +
   scale_color_discrete(name = "Subject")
 ```
-    ii. also include in the results section whether the fit didn't look good for any of the subjects. If so, identify those subjects in the report, and judge (no statistical test) whether their performance (accuracy) differed from that of the other subjects. Was their performance better than chance? (Use a statistical test this time) (50 %)  
+    ii. also include in the results section whether the fit didn't look good for any of the subjects. If so, identify those subjects in the report, and judge (no statistical test) whether their performance (accuracy) differed from that of the other subjects. Was their performance better than chance? (Use a statistical test this time) (50 %)
+    As seen in the above plot, the estimated function for subject 24 appears to differ from the other subjects, showing an apparently more linear relationship between accuracy and the number of target frames. They appear to demonstrate lower accuracy compared to the other subjects.
+```{r}
+#one-sample t-test
+sub24 <- df %>% 
+  filter(subject == 24) %>% 
+  mutate(correct_num = as.numeric(correct) - 1)
+t.test(sub24$correct_num, mu = 0.5)
+##### REFORMULATE INTO A REGRESSION?????? We would use the ground truth values because those are not influenced by the other participants' performance as the fitted values are.
+```
+    
 3) Now add _pas_ to the group-level effects - if a log-likelihood ratio test justifies this, also add the interaction between _pas_ and _target.frames_ and check whether a log-likelihood ratio test justifies this
 ```{r}
 # Establish models
@@ -201,16 +219,39 @@ model_5.2f <- glmer(correct ~ target.frames * pas + (target.frames | subject),
                     family = 'binomial', 
                     data = df,
                     control = glmerControl(optimizer = "bobyqa")) #model wasn't converging so it had to be optimized
-
-# Test log-likelihood ratios
-anova(model_5.2f, model_5.2e, model_5.2d, model_5.2c, model_5.2b, model_5.2a, test = "Chisq")
 ```
     i. if your model doesn't converge, try a different optimizer  
     ii. plot the estimated group-level functions over `xlim=c(0, 8)` for each of the four PAS-ratings - add this plot to your report (see: 5.2.i) and add a description of your chosen model. Describe how _pas_ affects accuracy together with target duration if at all. Also comment on the estimated functions' behavior at target.frame=0 - is that behaviour reasonable?
 ```{r}
-
+df <- cbind(df, fitted_f = fitted(model_5.2f), probabilities_f = inv.logit(fitted(model_5.2f)))
+ggplot(df, aes(x = target.frames, y = probabilities_f, color = subject)) + 
+  geom_line() +
+  xlim(0, 8) +
+  labs(x = "Number of target frames",
+       y = "Probability of correct answer",
+       title = "Estimated function by subject and PAS-rating") +
+  scale_color_discrete(name = "Subject") +
+  facet_wrap('pas') +
+  theme_minimal()
 ```
-    
+    When participants reported low perceptual awareness (PAS = 1), there does not seem to be any systematic effect on accuracy. A clearer function (approximating a logarithmic curve) emerges as perceptual awareness increases, with less differentiation between subjects.
+```{r}
+# Test log-likelihood ratios
+anova(model_5.2f, model_5.2e, model_5.2d)
+```
+    The chosen model performs better than the other models in terms of AIC scores. When conducting a likelihood ratio test, we found the added complexity to significantly improve log-likelihood scores (χ² (3) = 379.58, p < .001).
+```{r}
+summary(model_5.2f)
+```
+    Accuracy is found to be significantly modulated by the number of target frames (beta = 0.11480, SE = 0.03707, p < .05) and Pas-rating(PAS 2: beta = -0.57139, SE = 0.03707, p < .05; PAS 3: beta = 0.11480, SE = 0.03707, p < .05; PAS 4: beta = 0.11480, SE = 0.03707, p < .05), as well as the interaction of these variables
+    This means that accuracy increases 
+```{r}
+inv.logit(-0.12163) #intercept for PAS 1
+inv.logit(-0.12163 + -0.57139) #intercept for PAS 2
+inv.logit(-0.12163 + -0.53850) #intercept for PAS 3
+inv.logit(-0.12163 + 0.20159) #intercept for PAS 4
+```
+    According to the model, when 0 target frames are shown, at PAS-rating 1 accuracy is estimated at 47%, at PAS-rating 2 at 33%, at PAS-rating 3 at 34% and at PAS-rating as 52%. This is not reasonable as it makes no sense to consider perceptual accuracy when no stimulus is perceived, and the model does not take into account that when the participant has two options to choose from and no information, their performance will conceptually be at the level of chance, i.e. at 50% accuracy. While the intercept at PAS-rating 1 and 4 are close to this value, this is due to coincidence rather than use of the aforementioned logic.
 
 # EXERCISE 6 - Test linear hypotheses
 
@@ -218,24 +259,68 @@ In this section we are going to test different hypotheses. We assume that we hav
 We want to test a hypothesis for each of the three neighbouring differences in PAS, i.e. the difference between 2 and 1, the difference between 3 and 2 and the difference between 4 and 3. More specifically, we want to test the hypothesis that accuracy increases faster with objective evidence if subjective evidence is higher at the same time, i.e. we want to test for an interaction.  
 
 1) Fit a model based on the following formula: `correct ~ pas * target.frames + (target.frames | subject))`
+```{r}
+model_6.1a <- glmer(correct ~ pas * target.frames + (target.frames | subject),
+                    data = df,
+                    family = 'binomial')
+```
     i. First, use `summary` (yes, you are allowed to!) to argue that accuracy increases faster with objective evidence for PAS 2 than for PAS 1. 
+```{r}
+summary(model_6.1a)
+
+# WHEN WORKING WITH INTERACTIONS, YOU ALWAYS ADD EVERY CATEGORY OF FIXED EFFECT THAT THE COMPONENTS APPEAR IN
+# For PAS 1 and 1 target frame:
+#intercept
+#inv.logit(-0.12163)
+
+# For PAS 2 and 1 target frame:
+# intercept + effect of PAS 2 + effect of PAS 2 : target frames interaction (since "PAS 2" is present in both and is therefore involved in the outcome)
+#inv.logit(-0.12163 + -0.57139 + 0.44718)
+
+# For PAS 1 and 3 target frames:
+# intercept + 3 effects of target frames
+#inv.logit(-0.12163 + 3 * 0.11480)
+
+# For PAS 2 and 3 target frames:
+# intercept + effect of PAS 2 + 3 effects of target frames + effect of PAS 2 : target frames interaction
+#inv.logit(-0.12163 + -0.57139 + 3 * 0.11480 + 0.44718)
+
+# Just the interaction effect of PAS 2 * target frames
+inv.logit(0.44718)
+```
+    The interaction effect _pas2:target.frames_ is positive and therefore shows that when PAS-rating is 2, every incremental increase in the number of target frames results in an additional 61% increase in accuracy.
 2) `summary` won't allow you to test whether accuracy increases faster with objective evidence for PAS 3 than for PAS 2 (unless you use `relevel`, which you are not allowed to in this exercise). Instead, we'll be using the function `glht` from the `multcomp` package
-    i. To redo the test in 6.1.i, you can create a _contrast_ vector. This vector will have the length of the number of estimated group-level effects and any specific contrast you can think of can be specified using this. For redoing the test from 6.1.i, the code snippet below will do
+    i. To redo the test in 6.1.i, you can create a _contrast_ vector. This vector will have the length of the number of estimated group-level effects and any specific contrast you can think of can be specified using this. For redoing the test from 6.1.i, the code snippet below will do.
+```{r}
+# Group-level effects refers to the fixed effects, of which we have 8: (intercept), pas2, pas3, pas4, target.frms, ps2:trgt.fr, ps3:trgt.fr, ps3:trgt.fr
+# The elements of the established vector correspond to elements on the list of fixed effects.
+
+# Difference between intercepts of PAS 1 and the interaction 'PAS 2 : target frames' - we have the same intercept, and '1' refers to the fixed effect we are comparing
+con_test_1 <- matrix(c(0, 0, 0, 0, 0, 1, 0, 0), nrow = 1)
+gh_test_1 <- glht(model_6.1a, con_test_1)
+print(summary(gh_test_1))
+
+# Difference between intercepts of PAS 2 and PAS 3 - '-1' refers to the new baseline, and '1' refers to the fixed effect we are comparing
+con_test_2 <- matrix(c(0, -1, 1, 0, 0, 0, 0, 0), nrow = 1)
+gh_test_2 <- glht(model_6.1a, con_test_2)
+print(summary(gh_test_2))
+
+# Difference between interactions 'PAS 2 : target frames' and 'PAS 3 : target frames'
+con_2and3 <- matrix(c(0, 0, 0, 0, 0, -1, 1, 0), nrow = 1)
+gh_2and3 <- glht(model_6.1a, con_2and3)
+print(summary(gh_2and3))
+
+# Difference between interactions 'PAS 2 : target frames' and 'PAS 3 : target frames'
+con_3and4 <- matrix(c(0, 0, 0, 0, 0, 0, -1, 1), nrow = 1)
+gh_3and4 <- glht(model_6.1a, con_3and4)
+print(summary(gh_3and4))
+```
     ii. Now test the hypothesis that accuracy increases faster with objective evidence for PAS 3 than for PAS 2.
     iii. Also test the hypothesis that accuracy increases faster with objective evidence for PAS 4 than for PAS 3
 3) Finally, test that whether the difference between PAS 2 and 1 (tested in 6.1.i) is greater than the difference between PAS 4 and 3 (tested in 6.2.iii)
-
-### Snippet for 6.2.i
-```{r, eval=FALSE}
-## testing whether PAS 2 is different from PAS 1
-contrast.vector <- matrix(c(0, 0, 0, 0, 0, 1, 0, 0), nrow=1)
-gh <- glht(pas.intact.tf.ranslopeint.with.corr, contrast.vector)
-print(summary(gh))
-## as another example, we could also test whether there is a difference in
-## intercepts between PAS 2 and PAS 3
-contrast.vector <- matrix(c(0, -1, 1, 0, 0, 0, 0, 0), nrow=1)
-gh <- glht(pas.intact.tf.ranslopeint.with.corr, contrast.vector)
-print(summary(gh))
+```{r}
+print(summary(gh_test_1))
+print(summary(gh_3and4))
 ```
 
 # EXERCISE 7 - Estimate psychometric functions for the Perceptual Awareness Scale and evaluate them  
