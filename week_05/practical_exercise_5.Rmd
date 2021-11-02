@@ -179,6 +179,22 @@ c(logLik(model_5.2a),
 
 anova(model_5.2d, model_5.2c, model_5.2b, model_5.2a)
 ```
+    Correlation between fixed effects:
+```{r}
+VarCorr(model_5.2d)
+
+ranef <- ranef(model_5.2d) # extract random effects from chosen model and assign to variable
+
+for (i in seq(ranef)){
+  assign(paste0("ranef", i), ranef[[i]])
+}
+
+colnames(ranef1) <- c("Intercept", "target.frames")
+
+#We now plot the correlation between the random effects of intercept and slope.
+plot(ranef1$Intercept, ranef1$target.frames, ylab = "target.frames", xlab = "intercept", main = "Correlation between the random effects of the chosen model")
+```
+    As the above plot of the correlation of the random effects shows, the effects are negatively correlated with each other. In other words, this means that when the subject's intercept is below the sample mean, their associated slope is 'steeper', while the opposite applies for subjects' whose intercepts are above the sample mean.
     i. write a short methods section and a results section where you indicate which model you chose and the statistics relevant for that choice. Include a plot of the estimated group-level function with `xlim=c(0, 8)` that includes the estimated subject-specific functions.
     We chose model_5.2d in order to best describe the probability of obtaining a correct answer in the task when taking into account the number of target frames presented, as well as unique intercepts by subject and unique slopes by target frames presented:
     _correct ~ target.frames + (1 + target.frames | subject)_
@@ -201,14 +217,17 @@ ggplot(df, aes(x = target.frames, y = probabilities, color = subject)) +
     ii. also include in the results section whether the fit didn't look good for any of the subjects. If so, identify those subjects in the report, and judge (no statistical test) whether their performance (accuracy) differed from that of the other subjects. Was their performance better than chance? (Use a statistical test this time) (50 %)
     As seen in the above plot, the estimated function for subject 24 appears to differ from the other subjects, showing an apparently more linear relationship between accuracy and the number of target frames. They appear to demonstrate lower accuracy compared to the other subjects.
 ```{r}
-#one-sample t-test
+#isolate unruly subject
 sub24 <- df %>% 
-  filter(subject == 24) %>% 
-  mutate(correct_num = as.numeric(correct) - 1)
-t.test(sub24$correct_num, mu = 0.5)
-##### REFORMULATE INTO A REGRESSION?????? We would use the ground truth values because those are not influenced by the other participants' performance as the fitted values are.
+  filter(subject == 24)
+
+#binomial test
+table(sub24$correct) #see how many correct and incorrect answers
+vector <- c(496, 378) #establish vector of length 2 with number of correct and incorrect answers, respectively
+binom.test(vector, p = 0.5)
+#BUT IS 50% ENOUGH AS CHANCE, SHOULD IT BE 55%??
 ```
-    
+    When running a binomial test on the data of subject 24, we found that their performance, albeit poor, to be significantly better than chance when the level of chance is determined to be a 50% success rate.
 3) Now add _pas_ to the group-level effects - if a log-likelihood ratio test justifies this, also add the interaction between _pas_ and _target.frames_ and check whether a log-likelihood ratio test justifies this
 ```{r}
 # Establish models
@@ -332,32 +351,212 @@ It has four parameters: _a_, which can be interpreted as the minimum accuracy le
 We can define a function of a residual sum of squares as below
 
 ```{r, eval=FALSE}
-RSS <- function(dataset, par)
-{
-    ## "dataset" should be a data.frame containing the variables x (target.frames)
-    ## and y (correct)
-    
-    ## "par" are our four parameters (a numeric vector) 
-    ## par[1]=a, par[2]=b, par[3]=c, par[4]=d
+RSS <- function(dataset, par){
+    # "dataset" should be a data.frame containing the variables x (target.frames), y (correct)
     x <- dataset$x
-    y <- dataset$y
-    y.hat <- ## you fill in the estimate of y.hat
-    RSS <- sum((y - y.hat)^2)
+    y <- as.numeric(dataset$y) - 1
+    
+    # "par" are our four parameters (a numeric vector): par[1]=a, par[2]=b, par[3]=c, par[4]=d
+    a <- par[1]
+    b <- par[2]
+    c <- par[3]
+    d <- par[4]
+    
+    #y_hat can be estimated by the sigmoid function
+    y_hat <- a + (b - a) / (1 + exp((c - x) / d))
+    
+    #and now we calculate the residual sum of squares!
+    RSS <- sum((y - y_hat) ^ 2)
     return(RSS)
 }
 ```
 
-1) Now, we will fit the sigmoid for the four PAS ratings for Subject 7
+1) Now, we will fit the sigmoid for the four PAS ratings for Subject 7. However, in order to not take the subject in isolation (and to avoid fitting for too few datapoints) we optimize the function for each PAS rating for all subjects.
+```{r}
+# clean up df to run function
+df$x <- df$target.frames
+df$y <- df$correct
+
+df_1 <- df %>% 
+  filter(pas == 1)
+df_2 <- df %>% 
+  filter(pas == 2)
+df_3 <- df %>% 
+  filter(pas == 3)
+df_4 <- df %>% 
+  filter(pas == 4)
+```
     i. use the function `optim`. It returns a list that among other things contains the four estimated parameters. You should set the following arguments:  
     `par`: you can set _c_ and _d_ as 1. Find good choices for _a_ and _b_ yourself (and argue why they are appropriate)  
     `fn`: which function to minimise?  
     `data`: the data frame with _x_, _target.frames_, and _y_, _correct_ in it  
     `method`: 'L-BFGS-B'  
     `lower`: lower bounds for the four parameters, (the lowest value they can take), you can set _c_ and _d_ as `-Inf`. Find good choices for _a_ and _b_ yourself (and argue why they are appropriate)  
-    `upper`: upper bounds for the four parameters, (the highest value they can take) can set _c_ and _d_ as `Inf`. Find good choices for _a_ and _b_ yourself (and argue why they are appropriate)    
+    `upper`: upper bounds for the four parameters, (the highest value they can take) can set _c_ and _d_ as `Inf`. Find good choices for _a_ and _b_ yourself (and argue why they are appropriate)
+```{r}
+optim_1 <- optim(par = c(0.5, 1, 1, 1),
+      fn = RSS, 
+      data = df_1,
+      method = 'L-BFGS-B',
+      lower = c(0.5, 0.5, -Inf, -Inf),
+      upper = c(1, 1, Inf, Inf))
+optim_2 <- optim(par = c(0.5, 1, 1, 1),
+      fn = RSS, 
+      data = df_2,
+      method = 'L-BFGS-B',
+      lower = c(0.5, 0.5, -Inf, -Inf),
+      upper = c(1, 1, Inf, Inf))
+optim_3 <- optim(par = c(0.5, 1, 1, 1),
+      fn = RSS, 
+      data = df_3,
+      method = 'L-BFGS-B',
+      lower = c(0.5, 0.5, -Inf, -Inf),
+      upper = c(1, 1, Inf, Inf))
+optim_4 <- optim(par = c(0.5, 1, 1, 1),
+      fn = RSS, 
+      data = df_4,
+      method = 'L-BFGS-B',
+      lower = c(0.5, 0.5, -Inf, -Inf),
+      upper = c(1, 1, Inf, Inf))
+
+optim_1
+optim_2
+optim_3
+optim_4
+```
+    For the parameter 'a', we chose 0.5 because 50% is the level of chance and it does not make sense to have performance be lower than chance. For parameter 'b', we chose 1 because it is impossible to have more than 100% performance. This is also why we set the 'lower' values for both parameters 'a' and 'b' at 0.5 and the 'upper' values at 1 - the range of possible values for these parameters is always going to move between chance accuracy (50%) and maximum possible accuracy (100%).
     ii. Plot the fits for the PAS ratings on a single plot (for subject 7) `xlim=c(0, 8)`
-    iii. Create a similar plot for the PAS ratings on a single plot (for subject 7), but this time based on the model from 6.1 `xlim=c(0, 8)`   
-    iv. Comment on the differences between the fits - mention some advantages and disadvantages of each way  
+```{r}
+#modify function to output y_hat:
+sigmoid_y_hat <- function(dataset, par){
+    # "dataset" should be a data.frame containing the variable x (target.frames)
+    x <- dataset$x
+    
+    # "par" are our four parameters (a numeric vector): par[1]=a, par[2]=b, par[3]=c, par[4]=d
+    a <- par[1]
+    b <- par[2]
+    c <- par[3]
+    d <- par[4]
+    
+    #y_hat can be estimated by the sigmoid function
+    y_hat <- a + (b - a) / (1 + exp((c - x) / d))
+    return(y_hat)
+}
+
+#get y_hat values (by plugging in the optimized parameters)
+y_hat <- sigmoid_y_hat(df_1, optim_1$par)
+df_1 <- cbind(df_1, y_hat)
+
+y_hat <- sigmoid_y_hat(df_2, optim_2$par)
+df_2 <- cbind(df_2, y_hat)
+
+y_hat <- sigmoid_y_hat(df_3, optim_3$par)
+df_3 <- cbind(df_3, y_hat)
+
+y_hat <- sigmoid_y_hat(df_4, optim_4$par)
+df_4 <- cbind(df_4, y_hat)
+
+# FILTER FOR SUBJECT 7
+df_1_7 <- df_1 %>% 
+  filter(subject == 7)
+df_2_7 <- df_2 %>% 
+  filter(subject == 7)
+df_3_7 <- df_3 %>% 
+  filter(subject == 7)
+df_4_7 <- df_4 %>% 
+  filter(subject == 7)
+
+df_7 <- rbind(df_1_7, df_2_7, df_3_7, df_4_7)
+
+# PLOT
+# PAS 1
+ggplot(df_7, aes(x = target.frames, y = y_hat, color = pas)) + 
+  geom_line() +
+  xlim(0, 8) +
+  labs(x = "Number of target frames",
+       y = "Probability of correct answer",
+       title = "Estimated function for Subject 7 by PAS-rating") +
+  theme_minimal()
+```
+    iii. Create a similar plot for the PAS ratings on a single plot (for subject 7), but this time based on the model from 6.1 `xlim=c(0, 8)`
+```{r}
+df <- cbind(df, fitted6.1 = inv.logit(fitted(model_6.1a)))
+df7 <- df %>% filter(subject == 7)
+ggplot(df7, aes(x = target.frames, y = fitted6.1, color = pas)) + 
+  geom_line() +
+  xlim(0, 8) +
+  labs(x = "Number of target frames",
+       y = "Probability of correct answer",
+       title = "Estimated function for Subject 7 by PAS-rating") +
+  scale_color_discrete(name = "PAS-rating") +
+  theme_minimal()
+
+summary(model_6.1a)
+```
+    iv. Comment on the differences between the fits - mention some advantages and disadvantages of each way 
+    In broad lines, the two estimation procedures yield similar results. An advantage of using a sigmoid function with optimized parameters is that the estimated function does not yield illogical estimates (such as performance that is worse than chance when the participant perceives no stimulus due to none being shown); however, parameter optimization relies on subsetting the data, meaning that the entire dataset is never taken into consideration as a whole, meaning that e.g. at PAS rating 1, subject 7's performance appears to decline the more target frames they are shown.
 2) Finally, estimate the parameters for all subjects and each of their four PAS ratings. Then plot the estimated function at the group-level by taking the mean for each of the four parameters, _a_, _b_, _c_ and _d_ across subjects. A function should be estimated for each PAS-rating (it should look somewhat similar to Fig. 3 from the article:  https://doi.org/10.1016/j.concog.2019.03.007)
+```{r}
+#Estimate parameters at for all subjects at all PAS-ratings
+#get y_hat values (by plugging in the optimized parameters)
+y_hat <- sigmoid_y_hat(df_1, optim_1$par)
+df_1 <- cbind(df_1, y_hat)
+
+y_hat <- sigmoid_y_hat(df_2, optim_2$par)
+df_2 <- cbind(df_2, y_hat)
+
+y_hat <- sigmoid_y_hat(df_3, optim_3$par)
+df_3 <- cbind(df_3, y_hat)
+
+y_hat <- sigmoid_y_hat(df_4, optim_4$par)
+df_4 <- cbind(df_4, y_hat)
+
+df_all <- rbind(df_1, df_2, df_3, df_4)
+
+ggplot(df_all, aes(x = target.frames, y = y_hat, color = pas)) + 
+  geom_line() +
+  xlim(0, 8) +
+  labs(x = "Number of target frames",
+       y = "Probability of correct answer",
+       title = "Estimated function for all subjects by PAS-rating") +
+  scale_color_discrete(name = "PAS-rating")
+  theme_minimal()
+```
+    With a loop:
+```{r}
+View(df)
+for (i in 1:29){
+  
+  # Take 1 subject at a time
+  by_subject <- df %>% filter(subject == i)
+  data <- data.frame()
+  
+  for (j in 1:4){
+    
+    # Take 1 PAS-rating at a time
+    by_pas <- by_subject %>% filter(pas == j)
+    
+    # Optimize parameters for this subject & PAS-rating
+    optim <- optim(par = c(0.5, 1, 1, 1),
+      fn = RSS, 
+      data = by_pas,
+      method = 'L-BFGS-B',
+      lower = c(0.5, 0.5, -Inf, -Inf),
+      upper = c(1, 1, Inf, Inf))
+    
+    # Data for this subject & PAS-rating
+    temp <- as.data.frame(a = optim$par[1],
+                          b = optim$par[2],
+                          c = optim$par[3],
+                          d = optim$par[4],
+                          pas = j,
+                          subject = i
+    )
+    
+    # Append to data frame
+    data <- rbind(data, temp)
+  }
+}
+```
     i. compare with the figure you made in 5.3.ii and comment on the differences between the fits - mention some advantages and disadvantages of both.
     
