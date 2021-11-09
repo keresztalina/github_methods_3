@@ -33,17 +33,19 @@ print(conda_list())
 To update your environment based on the updated `methods3_environment.yml` file, go to your _week_06_ folder and run the following from a _bash_ interpreter (e.g. _terminal_):  
 
 ```{bash, eval=FALSE}
+# You already ran this in the Bash terminal - but it's super nice that you can run it here too!
 conda env create --force -f methods3_environment.yml
 ```
 
 The `--force` flag allows for overwriting  
 
 ## Good to know about _Python_ (in no particular order)
-
+Basic operations:
 ```{python}
 ## assignment is done and only done with "=" (no arrows)
 a = 2
 # a <- 2 # results in a syntax error
+
 ## already assigned variables can be reassigned with basic arithmetic operations
 a += 2
 print(a)
@@ -57,7 +59,10 @@ a /= 2 # float  (numeric from R) division
 print(a)
 a **= 3 # exponentiation 
 print(a)
+```
 
+List actions:
+```{python}
 a_list = [1, 2] # initiate a list (the square brackets) with the integers 1 and 2
 b = a_list ## b now points to a_list, not to a new list with the integers 1 and 2 
 
@@ -65,13 +70,17 @@ a_list.append(3) # add a new value to the end of the list
 print(a_list)
 print(b) # make sure you understand this
 
-print(a_list[0]) # zero-indexing
+print(a_list[0]) # zero-indexing - takes the first number!!!
 print(a_list[1])
-
 
 new_list = [0, 1, 2, 3, 4, 5]
 print(new_list[0:3])  # slicing
+# IMPORTANT!!! Python never includes the last number you index - you might specify you want 0:3, but that gives you positions 0, 1 and 2. 
+```
 
+Indentation and loops:
+```{python}
+# indentation (use tabulation) controls scope of control variables
 for index in range(0, 5): # indentation (use tabulation) controls scope of control variables 
     #(no brackets necessary),
     if index == 0: # remember the colon
@@ -79,11 +88,17 @@ for index in range(0, 5): # indentation (use tabulation) controls scope of contr
     else:
         value += index
     print(value)
+# It's not gonna print shit if there's nothing breaking the tabulation!
+```
 
-  
+Logical values:
+```{python}
 this_is_true = True # logical values
 this_is_false = False
-    
+```
+
+Function definition:
+```{python}
 # define functions using def
 def fix_my_p_value(is_it_supposed_to_be_significant):
     if is_it_supposed_to_be_significant:
@@ -93,25 +108,37 @@ def fix_my_p_value(is_it_supposed_to_be_significant):
     return(p)
 
 print(fix_my_p_value(True))
+```
 
-
+Import packages:
+```{python}
 import numpy # methods of numpy can now be accessed as below
 # importing packages (similar to library)
 
 print(numpy.arange(1, 10)) # see the dot
 print(numpy.abs(-3))
+
 import numpy as np # you can import them with another name than its default
 print(np.cos(np.pi))
+
 from numpy import pi, arange # or you can import specific methods
 print(arange(1, 7))
 print(pi)
+```
 
+Example! Matrices:
+```{python}
 matrix = np.ones(shape=(5, 5)) # create a matrix of ones
 identity = np.identity(5) # create an identity matrix (5x5)
 identity[:, 2] = 5 # exchange everything in the second column with 5's
 
 ## no dots in names - dots indicate applying a method like the dollar sign $ in R
+print(matrix)
+print(identity)
+```
 
+Basic plotting:
+```{python}
 import matplotlib.pyplot as plt
 plt.figure() # create new figure
 plt.plot([1, 2], [1, 2], 'b-') # plot a blue line
@@ -127,7 +154,31 @@ plt.legend(['a legend', 'another legend'])
 1) Do a linear regression based on _x_, _X_ and _y_ below (_y_ as the dependent variable) (Exercise 1.1)  
     i. find $\hat{\beta}$ and $\hat{y}$ (@ is matrix multiplication)
     ii. plot a scatter plot of _x_, _y_ and add a line based on $\hat{y}$ (use `plt.plot` after running `import matplotlib.pyplot as plt`)  
-2) Create a model matrix, $X$ that estimates, $\hat\beta$ the means of the three sets of observations below, $y_1, y_2, y_3$ (Exercise 1.2)
+```{python}
+# Exercise 1.1
+import numpy as np
+np.random.seed(7) # for reproducibility
+
+x = np.arange(10) # generate 9 values of x
+
+y = 2 * x # the values of y are just double the values of x
+y = y.astype(float) # or y = float(y)
+
+n_samples = len(y)
+y += np.random.normal(loc = 0, scale = 1, size = n_samples) # add error
+
+X = np.zeros(shape = (n_samples, 2)) # create matrix of X; here we just establish the structure
+X[:, 0] = x ** 0 # the first column is the values of x to the power of 0 (i.e. a column of 1s)
+X[:, 1] = x ** 1 # the second column is the values of x to the power of 1 (i.e. the values themselves)
+
+beta = ((np.transpose(X) @ X) ** -1) @ np.transpose(X) @ y #find coefficients through ordinary least squares
+print(beta)
+
+y_hat = beta[1] * x
+print(y_hat)
+```
+
+2) Create a model matrix, $X$ that estimates, $\hat\beta$ the means of the three sets of observations below, $y_1, y_2, y_3$ (Exercise 1.2) (ANOVA!)
     i. find $\hat\beta$ based on this $X$  
     ii. Then create an $X$ where the resulting $\hat\beta$ indicates: 1) the difference between the mean of $y_1$ and the mean of $y_2$; 2) the mean of $y_2$; 3) the difference between the mean of $y_3$ and the mean of $y_1$  
 3) Finally, find the F-value for this model (from exercise 1.2.ii) and its degrees of freedom. What is the _p_-value associated with it? (You can import the inverse of the cumulative probability density function `ppf` for _F_ using `from scipy.stats import f` and then run `1 - f.ppf`)
