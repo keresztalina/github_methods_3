@@ -171,11 +171,9 @@ X = np.zeros(shape = (n_samples, 2)) # create matrix of X; here we just establis
 X[:, 0] = x ** 0 # the first column is the values of x to the power of 0 (i.e. a column of 1s)
 X[:, 1] = x ** 1 # the second column is the values of x to the power of 1 (i.e. the values themselves)
 
-beta = ((np.transpose(X) @ X) ** -1) @ np.transpose(X) @ y #find coefficients through ordinary least squares
+beta = .linalg.inv(np.transpose(X) @ X) @ np.transpose(X) @ y #find coefficients through ordinary least squares
 print(beta)
 
-y_hat = beta[1] * x
-print(y_hat)
 ```
 
 2) Create a model matrix, $X$ that estimates, $\hat\beta$ the means of the three sets of observations below, $y_1, y_2, y_3$ (Exercise 1.2) (ANOVA!)

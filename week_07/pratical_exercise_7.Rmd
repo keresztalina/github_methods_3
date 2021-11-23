@@ -1,7 +1,7 @@
 ---
 title: "practical_exercise_7 , Methods 3, 2021, autumn semester"
-author: '[FILL IN YOUR NAME]'
-date: "[FILL IN THE DATE]"
+author: 'Alina Kereszt'
+date: "10.11.2021"
 output: html_document
 ---
 
@@ -10,6 +10,15 @@ output: html_document
   font-size: 14pt;
 }
 </style>
+
+```{python}
+# load packages
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+```
 
 
 # Exercises and objectives
@@ -35,33 +44,123 @@ where __bias__ is;
   
 $bias(\hat{f}(x_0)) = E[\hat{f}(x_0)] - f(x_0)$
 
-1) Create a function, $f(x)$ that squares its input. This is our __true__ function  
-    i. generate data, $y$, based on an input range of [0, 6] with a spacing of 0.1. Call this $x$
-    ii. add normally distributed noise to $y$ with $\sigma=5$ (set a seed to 7 `np.random.seed(7)`) to $y$ and call it $y_{noisy}$
-    iii. plot the true function and the generated points  
-2) Fit a linear regression using `LinearRegression` from `sklearn.linear_model` based on $y_{noisy}$ and $x$ (see code chunk below associated with Exercise 1.2)  
-    i. plot the fitted line (see the `.intercept_` and `.coef_` attributes of the `regressor` object) on top of the plot (from 1.1.iii)
-    ii. now run the code chunk below associated with Exercise 1.2.ii - what does X_quadratic amount to?
-    iii. do a quadratic and a fifth order fit as well and plot them (on top of the plot from 1.2.i)
+1) Create a function, $f(x)$ that squares its input. This is our __true__ function  (i)
+```{python}
+def truefunction(x):
+  y = x ** 2
+  return(y)
+```
+    i. generate data, $y$, based on an input range of [0, 6] with a spacing of 0.1. Call this $x$ (i)
+```{python}
+x = np.arange(start = 0, stop = 6, step = 0.1)
+y_true = truefunction(x)
+```
+    ii. add normally distributed noise to $y$ with $\sigma=5$ (set a seed to 7 `np.random.seed(7)`) to $y$ and call it $y_{noisy}$ (i)
+```{python}
+np.random.seed(7) # for reproducibility
+n_samples = len(y_true)
+y_noisy = y_true + np.random.normal(loc = 0, scale = 1, size = n_samples) # add error; loc is mean, scale is sd
+print(y_noisy)
+```
+    iii. plot the true function and the generated points (i)
+```{python}
+plt.figure() # create new figure
+plt.plot(x, y_noisy, 'b.') # true function; 'b' refers to blue, '.' refers to dots
+plt.plot(x, y_true, 'r-') # 'r' refers to red, '-' refers to line
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('True function and generated points')
+plt.legend(['Generated points', 'True function'])
+plt.show()
+```
+2) Fit a linear regression using `LinearRegression` from `sklearn.linear_model` based on $y_{noisy}$ and $x$ (see code chunk below associated with Exercise 1.2) (i)
+```{python}
+regressor = LinearRegression() # making the function an object so we can append stuff to it
+x_reshaped = x.reshape(-1, 1)
+fit = regressor.fit(x_reshaped, y_noisy) 
+```
+    i. plot the fitted line (see the `.intercept_` and `.coef_` attributes of the `regressor` object) on top of the plot (from 1.1.iii) (i)
+    ```{python}
+intercept = fit.intercept_ 
+slope = fit.coef_
+
+plt.figure()
+plt.plot(x, y_true, 'r-') # true function
+plt.plot(x, slope * x + intercept, 'k-') # estimated function
+plt.plot(x, y_noisy, 'b.') # generated points 
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('True function, linear fit and generated points')
+plt.legend(['True function', 'Estimated function', 'Generated points'])
+plt.show()
+```
+    ii. now run the code chunk below associated with Exercise 1.2.ii - what does X_quadratic amount to? (i)
+    ```{python}
+quadratic = PolynomialFeatures(degree = 2)
+X_quadratic = quadratic.fit_transform(x.reshape(-1, 1))
+# print(X_quadratic)
+# it's the design matrix we used to calculate OLS in the previous exercise, but a third column was added to represent 'x^2' in (ax^2 + bx + c)
+```
+    iii. do a quadratic and a fifth order fit as well and plot them (on top of the plot from 1.2.i) (i once I googled what 'fifth order fit' meant)
+    ```{python}
+# quadratic fit
+fit_2 = regressor.fit(X_quadratic, y_noisy)
+
+# fifth order fit
+fifth_order = PolynomialFeatures(degree = 5)
+X_fifth_order = fifth_order.fit_transform(x.reshape(-1, 1))
+fit_5 = regressor.fit(X_fifth_order, y_noisy)
+
+# acquire fitted values
+y_pred_2 = regressor.predict(X_quadratic)
+y_pred_5 = regressor.predict(X_fifth_order)
+
+# plot
+plt.figure()
+plt.plot(x, y_true, 'r-') # true function
+plt.plot(x, slope * x + intercept, 'k-') # estimated function (linear)
+plt.plot(x, y_noisy, 'b.') # generated points 
+plt.plot(x, y_pred_2, 'm-')  # estimated function (quadratic)
+plt.plot(x, y_pred_2, 'c-')  # estimated function (fifth order)
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('True function, linear fit and generated points')
+plt.legend(['True function', 'Linear estimate', 'Quadratic estimate', 'Fifth order estimate', 'Generated points'])
+plt.show()
+```
 3) Simulate 100 samples, each with sample size `len(x)` with $\sigma=5$ normally distributed noise added on top of the true function    
+```{python}
+
+```
     i. do linear, quadratic and fifth-order fits for each of the 100 samples  
+    ```{python}
+
+```
     ii. create a __new__ figure, `plt.figure`, and plot the linear and the quadratic fits (colour them appropriately); highlight the true value for $x_0=3$. From the graphics alone, judge which fit has the highest bias and which has the highest variance for $x_0$  
+    ```{python}
+
+```
     iii. create a __new__ figure, `plt.figure`, and plot the quadratic and the fifth-order fits (colour them appropriately); highlight the true value for $x_0=3$. From the graphics alone, judge which fit has the highest bias and which has the highest variance for $x_0$  
+    ```{python}
+
+```
     iv. estimate the __bias__ and __variance__ at $x_0$ for the linear, the quadratic and the fifth-order fits (the expected value $E[\hat{f}(x_0)] - f(x_0)$ is found by taking the mean of all the simulated, $\hat{f}(x_0)$, differences)  
+    ```{python}
+
+```
     v. show how the __squared bias__ and the __variance__ is related to the complexity of the fitted models  
+    ```{python}
+
+```
     vi. simulate __epsilon__: `epsilon = np.random.normal(scale=5, size=100)`. Based on your simulated values of __bias, variance and epsilon__, what is the __Mean Squared Error__ for each of the three fits? Which fit is better according to this measure? 
+    ```{python}
+
+```
 
     
-```{python, eval=FALSE}
-# Exercise 1.2
-from sklearn.linear_model import LinearRegression
-regressor = LinearRegression()
-regressor.fit() ## what goes in here?
-```    
 
 ```{python, eval=FALSE}
 # Exercise 1.2.ii
-from sklearn.preprocessing import PolynomialFeatures
 quadratic = PolynomialFeatures(degree=2)
 X_quadratic = quadratic.fit_transform(x.reshape(-1, 1))
 regressor = LinearRegression()
