@@ -29,6 +29,9 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
 np.random.seed(420)
 ```
 
@@ -355,40 +358,7 @@ plt.show()
 # EXERCISE 3 - Do a Support Vector Machine Classification on all four PAS-ratings  
 1) Do a Support Vector Machine Classification  
     i. First equalize the number of targets using the function associated with each PAS-rating using the function associated with Exercise 3.1.i  
-    ```{python}
-
-```
-    ii. Run two classifiers, one with a linear kernel and one with a radial basis (other options should be left at their defaults) - the number of features is the number of sensors multiplied the number of samples. Which one is better predicting the category?
-    ```{python}
-
-```
-    iii. Run the sample-by-sample analysis (similar to Exercise 2.2.v) with the best kernel (from Exercise 3.1.ii). Make a plot with time on the x-axis and classification score on the y-axis with a horizontal line at the chance level (what is the chance level for this analysis?)
-    ```{python}
-
-```
-    iv. Is classification of subjective experience possible at around 200-250 ms?  
-    ```{python}
-
-```
-2) Finally, split the equalized data set (with all four ratings) into a training part and test part, where the test part if 30 % of the trials. Use `train_test_split` from `sklearn.model_selection`  
 ```{python}
-
-```
-    i. Use the kernel that resulted in the best classification in Exercise 3.1.ii and `fit`the training set and `predict` on the test set. This time your features are the number of sensors multiplied by the number of samples.
-    ```{python}
-
-```
-    ii. Create a _confusion matrix_. It is a 4x4 matrix. The row names and the column names are the PAS-scores. There will thus be 16 entries. The PAS1xPAS1 entry will be the number of actual PAS1, $y_{pas1}$ that were predicted as PAS1, $\hat y_{pas1}$. The PAS1xPAS2 entry will be the number of actual PAS1, $y_{pas1}$ that were predicted as PAS2, $\hat y_{pas2}$ and so on for the remaining 14 entries.  Plot the matrix
-    ```{python}
-
-```
-    iii. Based on the confusion matrix, describe how ratings are misclassified and if that makes sense given that ratings should measure the strength/quality of the subjective experience. Is the classifier biased towards specific ratings?  
-    ```{python}
-
-```
-    
-```{python, eval=FALSE}
-
 def equalize_targets(data, y):
     np.random.seed(7)
     targets = np.unique(y)
@@ -409,5 +379,100 @@ def equalize_targets(data, y):
     new_data = data[new_indices, :, :]
     
     return new_data, new_y
-
+  
+equalized2 = equalize_targets(data, y)
+X_all_equal = equalized2[0]
+y_all_equal = equalized2[1]
 ```
+    ii. Run two classifiers, one with a linear kernel and one with a radial basis (other options should be left at their defaults) - the number of features is the number of sensors multiplied the number of samples. Which one is better predicting the category?
+```{python}
+shape2 = X_all_equal.shape
+time_by_sensor = shape2[1] * shape2[2]
+X_all = np.reshape(X_all_equal, (shape2[0], time_by_sensor))
+X_all.shape
+
+#SVM setup
+cv = StratifiedKFold()
+X = X_all
+y = y_all_equal
+
+sc = StandardScaler()
+sc.fit(X)
+X_all_std = sc.transform(X)
+
+svm_linear = SVC(kernel = 'linear')
+scores_svm_linear = cross_val_score(svm_linear, X_all_std, y, cv = cv)
+
+svm_rbf = SVC(kernel = 'rbf') #radial basis function
+scores_svm_rbf = cross_val_score(svm_rbf, X_all_std, y, cv = cv)
+
+np.mean(scores_svm_linear)
+np.mean(scores_svm_rbf)
+```
+    iii. Run the sample-by-sample analysis (similar to Exercise 2.2.v) with the best kernel (from Exercise 3.1.ii). Make a plot with time on the x-axis and classification score on the y-axis with a horizontal line at the chance level (what is the chance level for this analysis?)
+```{python}
+svm_rbf = SVC(kernel = 'rbf') #radial basis function
+score_means = np.zeros(shape = (251)) # create empty variable to receive scores
+for i in range(251):
+  X_all_bytime = X_all_equal[:, :, i]
+  X_all_bytime = sc.fit_transform(X_all_bytime)
+  svm_rbf.fit(X_all_bytime, y_all_equal)
+  score = cross_val_score(svm_rbf, X_all_bytime, y_all_equal, cv = cv)
+  score_mean = np.mean(score)
+  score_means[i] = score_mean
+  
+highest_score = np.argmax(score_means)
+plt.figure()
+plt.plot(times, score_means)
+plt.axvline(x = times[highest_score], color = 'r')
+plt.axhline(y = 0.25, color = 'k', linestyle = ':')
+plt.title('Classification accuracy by timestamp')
+plt.show()
+```
+    iv. Is classification of subjective experience possible at around 200-250 ms?  
+    Yes it's above the level of chance
+2) Finally, split the equalized data set (with all four ratings) into a training part and test part, where the test part if 30 % of the trials. Use `train_test_split` from `sklearn.model_selection`  
+```{python}
+X_train, X_test, y_train, y_test = train_test_split(X_all, y_all_equal, test_size = 0.3,
+                                                    random_state = 0)
+```
+    i. Use the kernel that resulted in the best classification in Exercise 3.1.ii and `fit`the training set and `predict` on the test set. This time your features are the number of sensors multiplied by the number of samples.
+    ```{python}
+sc = StandardScaler()
+sc.fit(X_train)
+X_train_std = sc.transform(X_train)
+X_test_std = sc.transform(X_test)
+svm_rbf = SVC(kernel = 'rbf') #radial basis function
+svm_rbf_fit = svm_rbf.fit(X_train_std, y_train)
+predictions = svm_rbf.predict(X_test_std)
+```
+    ii. Create a _confusion matrix_. It is a 4x4 matrix. The row names and the column names are the PAS-scores. There will thus be 16 entries. The PAS1xPAS1 entry will be the number of actual PAS1, $y_{pas1}$ that were predicted as PAS1, $\hat y_{pas1}$. The PAS1xPAS2 entry will be the number of actual PAS1, $y_{pas1}$ that were predicted as PAS2, $\hat y_{pas2}$ and so on for the remaining 14 entries.  Plot the matrix
+    ```{python}
+from sklearn.metrics import confusion_matrix
+
+cm = confusion_matrix(y_test, predictions)
+
+# 'feature scaling' is just fancy for normalizing and standardizing
+import seaborn as sns
+plt.figure()
+heatmap = sns.heatmap(cm, annot = True, cmap = 'Blues')
+heatmap.set_title('Actual PAS')
+heatmap.set_xlabel('Actual PAS')
+heatmap.set_ylabel('Predicted PAS')
+plt.show()
+```
+    iii. Based on the confusion matrix, describe how ratings are misclassified and if that makes sense given that ratings should measure the strength/quality of the subjective experience. Is the classifier biased towards specific ratings?  
+    PAS 3 has the most misclassifications.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

@@ -1,7 +1,7 @@
 ---
 title: "practical_exercise_10 , Methods 3, 2021, autumn semester"
-author: '[FILL IN YOUR NAME]'
-date: "[FILL IN THE DATE]"
+author: 'Alina Kereszt'
+date: "30.11.2021"
 output: html_document
 ---
 
@@ -18,7 +18,19 @@ output: html_document
 
 
 REMEMBER: In your report, make sure to include code that can reproduce the answers requested in the exercises below (__MAKE A KNITTED VERSION__)  
-REMEMBER: This is Assignment 4 and will be part of your final portfolio   
+REMEMBER: This is Assignment 4 and will be part of your final portfolio
+```{python}
+# load packages
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+import seaborn as sns
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+np.random.seed(420)
+```
+
 
 # EXERCISE 1 - Use principal component analysis to improve the classification of subjective experience  
 
@@ -28,22 +40,11 @@ The function `equalize_targets` is supplied - this time, we will only work with 
 
 1) Create a covariance matrix, find the eigenvectors and the eigenvalues
     i. Load `megmag_data.npy` and call it `data` using `np.load`. You can use `join`, which can be imported from `os.path`, to create paths from different string segments 
-    ii. Equalize the number of targets in `y` and `data` using `equalize_targets`  
-    iii. Construct `times=np.arange(-200, 804, 4)` and find the index corresponding to 248 ms - then reduce the dimensionality of `data` from three to two dimensions by only choosing the time index corresponding to 248 ms (248 ms was where we found the maximal average response in Assignment 3) 
-    iv. Scale the data using `StandardScaler`  
-    v. Calculate the sample covariance matrix for the sensors (you can use `np.cov`) and plot it (either using `plt.imshow` or `sns.heatmap` (`import seaborn as sns`))  
-    vi. What does the off-diagonal activation imply about the independence of the signals measured by the 102 sensors?  
-    vii. Run `np.linalg.matrix_rank` on the covariance matrix - what integer value do you get? (we'll use this later)  
-    viii. Find the eigenvalues and eigenvectors of the covariance matrix using `np.linalg.eig` - note that some of the numbers returned are complex numbers, consisting of a real and an imaginary part (they have a _j_ next to them). We are going to ignore this by only looking at the real parts of the eigenvectors and -values. Use `np.real` to retrieve only the real parts  
-2) Create the weighting matrix $W$ and the projected data, $Z$
-    i. We need to sort the eigenvectors and eigenvalues according to the absolute values of the eigenvalues (use `np.abs` on the eigenvalues).  
-    ii. Then, we will find the correct ordering of the indices and create an array, e.g. `sorted_indices` that contains these indices. We want to sort the values from highest to lowest. For that, use `np.argsort`, which will find the indices that correspond to sorting the values from lowest to highest. Subsequently, use `np.flip`, which will reverse the order of the indices.   
-    iii. Finally, create arrays of sorted eigenvalues and eigenvectors using the `sorted_indices` array just created. For the eigenvalues, it should like this `eigenvalues = eigenvalues[sorted_indices]` and for the eigenvectors: `eigenvectors = eigenvectors[:, sorted_indices]`
-    iv. Plot the log, `np.log`, of the eigenvalues, `plt.plot(np.log(eigenvalues), 'o')` - are there some values that stand out from the rest? In fact, 5 (noise) dimensions have already been projected out of the data - how does that relate to the matrix rank (Exercise 1.1.vii)  
-    v. Create the weighting matrix, `W` (it is the sorted eigenvectors)  
-    vi. Create the projected data, `Z`, $Z = XW$ - (you can check you did everything right by checking whether the $X$ you get from $X = ZW^T$ is equal to your original $X$, `np.isclose` may be of help)
-    vii. Create a new covariance matrix of the principal components (n=102) - plot it! What has happened off-diagonal and why?
-
+```{python}
+data = np.load('megmag_data.npy') 
+y = np.load('pas_vector.npy') # load data
+```
+    ii. Equalize the number of targets in `y` and `data` using `equalize_targets`
 ```{python}
 def equalize_targets(data, y):
     np.random.seed(7)
@@ -65,23 +66,185 @@ def equalize_targets(data, y):
     new_data = data[new_indices, :, :]
     
     return new_data, new_y
-
+  
+equalized = equalize_targets(data, y)
+X_equal = equalized[0]
+y_equal = equalized[1]
 ```
+    iii. Construct `times=np.arange(-200, 804, 4)` and find the index corresponding to 248 ms - then reduce the dimensionality of `data` from three to two dimensions by only choosing the time index corresponding to 248 ms (248 ms was where we found the maximal average response in Assignment 3) 
+```{python}
+times = np.arange(-200, 804, 4)
+index_248ms = np.where(times == 248)
+X_248ms = X_equal[:, :, index_248ms[0]]
+X_248ms = np.reshape(X_248ms, (396, 102))
+X_248ms.shape
+X_248ms
+```
+    iv. Scale the data using `StandardScaler`  
+```{python}
+sc = StandardScaler()
+X_248ms_std = sc.fit_transform(X_248ms)
+```
+    v. Calculate the sample covariance matrix for the sensors (you can use `np.cov`) and plot it (either using `plt.imshow` or `sns.heatmap` (`import seaborn as sns`))  
+```{python}
+covmat = np.cov(X_248ms_std, rowvar = False)
+
+plt.figure()
+sns.heatmap(covmat, square = True) # makes sure the matrix is not all squishy squishy
+plt.show()
+```
+    vi. What does the off-diagonal activation imply about the independence of the signals measured by the 102 sensors?  
+    It implies that the measurements by the sensors are not entirely independent of each other, meaning that if we took the measurements from all sensors into account, we would be modeling a significant amount of noise (and thereby hurting our prediction accuracy).
+    vii. Run `np.linalg.matrix_rank` on the covariance matrix - what integer value do you get? (we'll use this later)  
+```{python}
+# matrix rank is the number of linearly independent rows or columns in the matrix
+matrix_rank = np.linalg.matrix_rank(covmat)
+matrix_rank
+```
+    viii. Find the eigenvalues and eigenvectors of the covariance matrix using `np.linalg.eig` - note that some of the numbers returned are complex numbers, consisting of a real and an imaginary part (they have a _j_ next to them). We are going to ignore this by only looking at the real parts of the eigenvectors and -values. Use `np.real` to retrieve only the real parts  
+```{python}
+# Eigenvalues and eigenvectors are basically just a decomposition of a square matrix; in essence you break the matrix down into its constituent parts so that it it easier to perform operations on it
+# One such operation is the reduction of dimensionality, i.e. removing variables that are just noise
+eigenvalues, eigenvectors = np.linalg.eig(covmat)
+# eigen = np.linalg.eig(covmat)
+# eigenvalues = eigen[0]
+# eigenvectors = eigen[1]
+eigenvalues = np.real(eigenvalues)
+eigenvectors = np.real(eigenvectors)
+eigenvectors
+```
+2) Create the weighting matrix $W$ and the projected data, $Z$
+    i. We need to sort the eigenvectors and eigenvalues according to the absolute values of the eigenvalues (use `np.abs` on the eigenvalues).  
+```{python}
+eigenvalues_abs = np.abs(eigenvalues) # find the absolute values of the eigenvalues
+eigenvalues_abs
+```
+    ii. Then, we will find the correct ordering of the indices and create an array, e.g. `sorted_indices` that contains these indices. We want to sort the values from highest to lowest. For that, use `np.argsort`, which will find the indices that correspond to sorting the values from lowest to highest. Subsequently, use `np.flip`, which will reverse the order of the indices.   
+```{python}
+# 'np.argsort' is an indirect sort; it sorts the indices of the values rather than the values themselves
+sorted_indices = np.argsort(eigenvalues_abs)
+sorted_indices = np.flip(sorted_indices)
+```
+    iii. Finally, create arrays of sorted eigenvalues and eigenvectors using the `sorted_indices` array just created. For the eigenvalues, it should like this `eigenvalues = eigenvalues[sorted_indices]` and for the eigenvectors: `eigenvectors = eigenvectors[:, sorted_indices]`
+```{python}
+# MAYBE A STUPID QUESTION BUT---- DO WE USE THE ABSOLUTE VALUES OR THE REGULAR ONES???
+eigenvalues = eigenvalues[sorted_indices]
+```
+    iv. Plot the log, `np.log`, of the eigenvalues, `plt.plot(np.log(eigenvalues), 'o')` - are there some values that stand out from the rest? In fact, 5 (noise) dimensions have already been projected out of the data - how does that relate to the matrix rank (Exercise 1.1.vii)  
+```{python}
+np.log(eigenvalues) # demonstrate that 4 eigenvalues do not have a natural logarithm
+plt.figure()
+plt.plot(np.log(eigenvalues), 'o', markersize = 1)
+plt.show()
+```
+    When evaluating matrix rank, we found that there were 97 linearly independent rows or columns in the matrix, i.e. 102 - 97 = 5 that *aren't* linearly independent - the measurements from that sensor correlate perfectly with the measurements from another sensor. This is also illustrated by taking the natural logarithm of the eigenvalues: 4 eigenvalues are negative, meaning that they do not possess a natural logarithm, while the 5th has a natural logarithm that is significantly different from that of the other eigenvalues.
+    v. Create the weighting matrix, `W` (it is the sorted eigenvectors)  
+```{python}
+W = eigenvectors[:, sorted_indices]
+W
+```
+    vi. Create the projected data, `Z`, $Z = XW$ - (you can check you did everything right by checking whether the $X$ you get from $X = ZW^T$ is equal to your original $X$, `np.isclose` may be of help)
+```{python}
+Z = X_248ms_std @ W
+Z.shape
+
+# verify that I have done it correctly
+X_check = Z @ W.T
+check = np.isclose(X_248ms_std, X_check)
+np.unique(check) # only matches - yay!
+```
+    vii. Create a new covariance matrix of the principal components (n=102) - plot it! What has happened off-diagonal and why?
+```{python}
+covmat2 = np.cov(Z, rowvar = False)
+
+# This shit black, and the diagonal isn't necessarily 1... the fuck??
+plt.figure()
+sns.heatmap(covmat2, square = True) # makes sure the matrix is not all squishy squishy
+plt.show()
+```
+    There is no collinearity between the dimensions off-diagonal.
 
 # EXERCISE 2 - Use logistic regression with cross-validation to find the optimal number of principal components  
 
 1) We are going to run logistic regression with in-sample validation 
     i. First, run standard logistic regression (no regularization) based on $Z_{d \times k}$ and `y` (the target vector). Fit (`.fit`) 102 models based on: $k = [1, 2, ..., 101, 102]$ and $d = 102$. For each fit get the classification accuracy, (`.score`), when applied to $Z_{d \times k}$ and $y$. This is an in-sample validation. Use the solver `newton-cg` if the default solver doesn't converge
+```{python}
+Z.shape
+logR = LogisticRegression(penalty = 'none', solver = 'newton-cg')
+scores = np.zeros(shape = (102))
+for i in range(102):
+  if i == 0:
+    X = Z[:, 0]
+    X = X.reshape(-1, 1)
+  elif i == 102:
+    X = Z[:, :]
+  else:
+    X = Z[:, 0:i+1]
+  logm = logR.fit(X, y_equal)
+  score = logm.score(X, y_equal)
+  scores[i] = score
+scores
+```
     ii. Make a plot with the number of principal components on the _x_-axis and classification accuracy on the _y_-axis - what is the general trend and why is this so?
+```{python}
+plt.figure()
+plt.plot(scores, color = 'm')
+plt.xlabel('Number of principal components')
+plt.ylabel('Classification accuracy')
+plt.show()
+```
+    Classification accuracy increases as we add more components up to certain level, then in the end it flattens.
     iii. In terms of classification accuracy, what is the effect of adding the five last components? Why do you think this is so?
+    They are linearly dependent on others, meaning that they don't add any extra information.
 2) Now, we are going to use cross-validation - we are using `cross_val_score` and `StratifiedKFold` from `sklearn.model_selection`
     i. Define the variable: `cv = StratifiedKFold()` and run `cross_val_score` (remember to set the `cv` argument to your created `cv` variable). Use the same `estimator` in `cross_val_score` as in Exercise 2.1.i. Find the mean score over the 5 folds (the default of `StratifiedKFold`) for each $k$, $k = [1, 2, ..., 101, 102]$  
+```{python}
+logR = LogisticRegression(penalty = 'none', solver = 'newton-cg')
+cv = StratifiedKFold(n_splits = 5)
+
+scores = np.zeros(shape = (102))
+for i in range(102):
+  if i == 0:
+    X = Z[:, 0]
+    X = X.reshape(-1, 1)
+  elif i == 102:
+    X = Z[:, :]
+  else:
+    X = Z[:, 0:i+1]
+  logm = logR.fit(X, y_equal)
+  score = cross_val_score(logm, X, y_equal, cv = cv)
+  mean = np.mean(score)
+  scores[i] = mean
+scores
+```
     ii. Make a plot with the number of principal components on the _x_-axis and classification accuracy on the _y_-axis - how is this plot different from the one in Exercise 2.1.ii?
+```{python}
+plt.figure()
+plt.plot(scores, color = 'm')
+plt.xlabel('Number of principal components')
+plt.ylabel('Classification accuracy')
+plt.show()
+```
     iii. What is the number of principal components, $k_{max\_accuracy}$, that results in the greatest classification accuracy when cross-validated?  
+```{python}
+
+```
     iv. How many percentage points is the classification accuracy increased with relative to the to the full-dimensional, $d$, dataset 
+```{python}
+
+```
     v. How do the analyses in Exercises 2.1 and 2.2 differ from one another? Make sure to comment on the differences in optimization criteria.  
+```{python}
+
+```
 3) We now make the assumption that $k_{max\_accuracy}$ is representative for each time sample (we only tested for 248 ms). We will use the PCA implementation from _scikit-learn_, i.e. import `PCA` from `sklearn.decomposition`.
-    i. For __each__ of the 251 time samples, use the same estimator and cross-validation as in Exercises 2.1.i and 2.2.i. Run two analyses - one where you reduce the dimensionality to $k_{max\_accuracy}$ dimensions using `PCA` and one where you use the full data. Remember to scale the data (for now, ignore if you get some convergence warnings - you can try to increase the number of iterations, but this is not obligatory)  
+    i. For __each__ of the 251 time samples, use the same estimator and cross-validation as in Exercises 2.1.i and 2.2.i. Run two analyses - one where you reduce the dimensionality to $k_{max\_accuracy}$ dimensions using `PCA` and one where you use the full data. Remember to scale the data (for now, ignore if you get some convergence warnings - you can try to increase the number of iterations, but this is not obligatory) 
+```{python}
+
+```
     ii. Plot the classification accuracies for each time sample for the analysis with PCA and for the one without in the same plot. Have time (ms) on the _x_-axis and classification accuracy on the _y_-axis 
+```{python}
+
+```
     iii. Describe the differences between the two analyses - focus on the time interval between 0 ms and 400 ms - describe in your own words why the logistic regression performs better on the PCA-reduced dataset around the peak magnetic activity  
 
