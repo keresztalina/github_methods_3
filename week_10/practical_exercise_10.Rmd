@@ -28,6 +28,7 @@ from sklearn.preprocessing import StandardScaler
 import seaborn as sns
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.decomposition import PCA
 np.random.seed(420)
 ```
 
@@ -127,7 +128,6 @@ sorted_indices = np.flip(sorted_indices)
 ```
     iii. Finally, create arrays of sorted eigenvalues and eigenvectors using the `sorted_indices` array just created. For the eigenvalues, it should like this `eigenvalues = eigenvalues[sorted_indices]` and for the eigenvectors: `eigenvectors = eigenvectors[:, sorted_indices]`
 ```{python}
-# MAYBE A STUPID QUESTION BUT---- DO WE USE THE ABSOLUTE VALUES OR THE REGULAR ONES???
 eigenvalues = eigenvalues[sorted_indices]
 ```
     iv. Plot the log, `np.log`, of the eigenvalues, `plt.plot(np.log(eigenvalues), 'o')` - are there some values that stand out from the rest? In fact, 5 (noise) dimensions have already been projected out of the data - how does that relate to the matrix rank (Exercise 1.1.vii)  
@@ -225,26 +225,66 @@ plt.xlabel('Number of principal components')
 plt.ylabel('Classification accuracy')
 plt.show()
 ```
+    Here, after a certain point, classification accuracy actually diminishes. This may be because the 'most important' variables (by eigenvalue) provide useful information, but the ones that are more collinear with these start introducing noise.
     iii. What is the number of principal components, $k_{max\_accuracy}$, that results in the greatest classification accuracy when cross-validated?  
 ```{python}
-
+max_accuracy_index = np.argmax(scores)
 ```
     iv. How many percentage points is the classification accuracy increased with relative to the to the full-dimensional, $d$, dataset 
 ```{python}
+score_max = scores[max_accuracy_index]
 
+logR = LogisticRegression(penalty = 'none', solver = 'newton-cg')
+cv = StratifiedKFold(n_splits = 5)
+fit_all = logR.fit(Z, y_equal)
+score_all = cross_val_score(fit_all, Z, y_equal, cv = cv)
+mean_all = np.mean(score)
+
+increase = score_max / mean_all * 100
+increase
 ```
+    It increased by approximately 27%.
     v. How do the analyses in Exercises 2.1 and 2.2 differ from one another? Make sure to comment on the differences in optimization criteria.  
-```{python}
-
-```
+    
 3) We now make the assumption that $k_{max\_accuracy}$ is representative for each time sample (we only tested for 248 ms). We will use the PCA implementation from _scikit-learn_, i.e. import `PCA` from `sklearn.decomposition`.
     i. For __each__ of the 251 time samples, use the same estimator and cross-validation as in Exercises 2.1.i and 2.2.i. Run two analyses - one where you reduce the dimensionality to $k_{max\_accuracy}$ dimensions using `PCA` and one where you use the full data. Remember to scale the data (for now, ignore if you get some convergence warnings - you can try to increase the number of iterations, but this is not obligatory) 
 ```{python}
+# MAX ACCURACY
+pca = PCA(n_components = 15)
+scores_max = np.zeros(shape = (251))
+logR = LogisticRegression(penalty = 'none', solver = 'newton-cg')
+cv = StratifiedKFold(n_splits = 5)
+sc = StandardScaler()
 
+for i in range(251):
+  X_time = X_equal[:, :, i]
+  X_time_std = sc.fit_transform(X_time)
+  X_pca = pca.fit_transform(X_time_std)
+  logm = logR.fit(X_pca, y_equal)
+  score = cross_val_score(logm, X_pca, y_equal, cv = cv)
+  mean = np.mean(score)
+  scores_max[i] = mean
+
+# ALL THE DATA
+scores_all = np.zeros(shape = (251))
+logR = LogisticRegression(penalty = 'none', solver = 'newton-cg')
+cv = StratifiedKFold(n_splits = 5)
+sc = StandardScaler()
+
+for i in range(251):
+  X_time = X_equal[:, :, i]
+  X_time_std = sc.fit_transform(X_time)
+  logm = logR.fit(X_time_std, y_equal)
+  score = cross_val_score(logm, X_time_std, y_equal, cv = cv)
+  mean = np.mean(score)
+  scores_all[i] = mean
 ```
     ii. Plot the classification accuracies for each time sample for the analysis with PCA and for the one without in the same plot. Have time (ms) on the _x_-axis and classification accuracy on the _y_-axis 
 ```{python}
-
+plt.figure()
+plt.plot(times, scores_max)
+plt.plot(times, scores_all)
+plt.show()
 ```
     iii. Describe the differences between the two analyses - focus on the time interval between 0 ms and 400 ms - describe in your own words why the logistic regression performs better on the PCA-reduced dataset around the peak magnetic activity  
 
