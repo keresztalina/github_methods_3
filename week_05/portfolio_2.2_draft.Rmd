@@ -1,18 +1,18 @@
 ---
-title: "practical_exercise_5, Methods 3, 2021, autumn semester"
-author: '[FILL IN YOUR NAME]'
-date: "[FILL IN THE DATE]"
+title: "Portfolio Exercise 2.2, Methods 3, 2021, autumn semester"
+author: 'Alina Kereszt'
+date: "13.12.2021"
 output: pdf_document
 ---
 
 <style type="text/css">
   body{
-  font-size: 14pt;
+  font-size: 12pt;
 }
 </style>
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, tidy = TRUE, tidy.opts = list(width.cutoff = 60))
 setwd("~/GitHub/Coding/Methods 3/week_05")
 pacman::p_load(tidyverse, lme4, MuMIn, boot, multcomp)
 ```
@@ -104,7 +104,7 @@ likelihood <- function(groundtruth, fitted_values) {
   #obtain probability by taking inverse logit of fitted values
   p <- inv.logit(fitted_values)
   
-  #make the variable numeric (and subtract 1 because when you convert numbers from vector to numeric, they begin with 1, not 0)
+  #make the variable numeric (and subtract 1 because when you convert numbers from factor to numeric, they begin with 1, not 0)
   y <- as.numeric(groundtruth) - 1
   
   #run the function for each row
@@ -124,10 +124,10 @@ likelihood <- function(groundtruth, fitted_values) {
 ```{r}
 loglikelihood <- function(groundtruth, fitted_values) {
   
-  #here you DO NOT take the inv.logit of the probabilities bc then the function fucks up and gives you the wrong answer - log-odds are the natural logarithm of odds
+  #here you DO NOT take the inv.logit of the probabilities bc then the function messes up and gives you the wrong answer - log-odds are the natural logarithm of odds
   p <- fitted_values
   
-  #make the variable numeric (and subtract 1 because when you convert numbers from vector to numeric, they begin with 1, not 0)
+  #make the variable numeric (and subtract 1 because when you convert numbers from factor to numeric, they begin with 1, not 0)
   y <- as.numeric(groundtruth) - 1
   
   #run the function for each row
@@ -146,10 +146,9 @@ loglikelihood <- function(groundtruth, fitted_values) {
     iii. apply both functions to the pooling model you just created. Make sure that the log-likelihood matches what is returned from the _logLik_ function for the pooled model. Does the likelihood-function return a value that is surprising? Why is the log-likelihood preferable when working with computers with limited precision? 
 ```{r}
 likelihood(df$correct, fitted(model_5.1a))
-loglikelihood(df$correct, fitted(model_5.1a))
 logLik(model_5.1a)
 ```
-    Probabilities take on values between 0 and 1, meaning that their products end up approximating 0 the more values are taken into consideration (the likelihood of obtaining the same 25000 values is veeeeeeery low); at a certain point, computers no longer calculate so many decimal places and output "0". Summing avoids this issue.
+    Probabilities take on values between 0 and 1, meaning that their products end up approximating 0 the more values are taken into consideration (understandably, as the likelihood of obtaining the same 25000 values is extremely low); at a certain point, computers no longer calculate so many decimal places and output "0". Summing (used in log-likelihood) avoids this issue, even if it means the output is somewhat arbitrary.
     iv. now show that the log-likelihood is a little off when applied to the partial pooling model - (the likelihood function is different for the multilevel function - see section 2.1 of https://www.researchgate.net/profile/Douglas-Bates/publication/2753537_Computational_Methods_for_Multilevel_Modelling/links/00b4953b4108d73427000000/Computational-Methods-for-Multilevel-Modelling.pdf if you are interested)
 ```{r}
 loglikelihood(df$correct, fitted(model_5.1b))
@@ -157,65 +156,47 @@ logLik(model_5.1b)
 ```
     
 2) Use log-likelihood ratio tests to argue for the addition of predictor variables, start from the null model, `glm(correct ~ 1, 'binomial', data)`, then add subject-level intercepts, then add a group-level effect of _target.frames_ and finally add subject-level slopes for _target.frames_. Also assess whether or not a correlation between the subject-level slopes and the subject-level intercepts should be included.
+*(NB! Exercise 5.2 has been coded in collaboration with the entire study group - Mie Søgaard, Linus Backström, Mikkel Kristensen, Alina Kereszt. The explanations are our own.)*
 ```{r}
 model_5.2a <- glm(correct ~ 1, 
                   family = 'binomial', 
                   data = df)
-model_5.2b <- glmer(correct ~ 1 + (1 | subject), 
+model_5.2b <- lme4::glmer(correct ~ 1 + (1 | subject), 
                     family = 'binomial', 
                     data = df)
-model_5.2c <- glmer(correct ~ target.frames + (1 | subject), 
+model_5.2c <- lme4::glmer(correct ~ target.frames + (1 | subject), 
                     family = 'binomial', 
                     data = df) #group-level effect = fixed effect:)
-model_5.2d <- glmer(correct ~ target.frames + (1 + target.frames | subject), 
+model_5.2d <- lme4::glmer(correct ~ target.frames + (1 + target.frames || subject), 
                     family = 'binomial', 
-                    data = df)
+                    data = df) # without correlation between random effects; indicated by '||'
+model_5.2e <- lme4::glmer(correct ~ target.frames + (1 + target.frames | subject), 
+                    family = 'binomial', 
+                    data = df) # with correlation between random effects
 
-c(logLik(model_5.2a),
-  logLik(model_5.2b),
-  logLik(model_5.2c),
-  logLik(model_5.2d)
-)
-
-anova(model_5.2d, model_5.2c, model_5.2b, model_5.2a)
+anova(model_5.2e, model_5.2d, model_5.2c, model_5.2b, model_5.2a)
 ```
-    Correlation between fixed effects:
+    When conducting a log-likelihood ratio test on the nested models, it was shown that each successive model constituted an improvement, and that the model including the interaction between the random effects had both the lowest AIC score and the lowest log-likelihood ratio, p < .001.
+    
+**i. write a short methods section and a results section where you indicate which model you chose and the statistics relevant for that choice. Include a plot of the estimated group-level function with `xlim=c(0, 8)` that includes the estimated subject-specific functions.**
+
 ```{r}
-VarCorr(model_5.2d)
-
-ranef <- ranef(model_5.2d) # extract random effects from chosen model and assign to variable
-
-for (i in seq(ranef)){
-  assign(paste0("ranef", i), ranef[[i]])
-}
-
-colnames(ranef1) <- c("Intercept", "target.frames")
-
-#We now plot the correlation between the random effects of intercept and slope.
-plot(ranef1$Intercept, ranef1$target.frames, ylab = "target.frames", xlab = "intercept", main = "Correlation between the random effects of the chosen model")
-```
-    As the above plot of the correlation of the random effects shows, the effects are negatively correlated with each other. In other words, this means that when the subject's intercept is below the sample mean, their associated slope is 'steeper', while the opposite applies for subjects' whose intercepts are above the sample mean.
-    i. write a short methods section and a results section where you indicate which model you chose and the statistics relevant for that choice. Include a plot of the estimated group-level function with `xlim=c(0, 8)` that includes the estimated subject-specific functions.
-    We chose model_5.2d in order to best describe the probability of obtaining a correct answer in the task when taking into account the number of target frames presented, as well as unique intercepts by subject and unique slopes by target frames presented:
-    _correct ~ target.frames + (1 + target.frames | subject)_
-    The chosen model performs better than the other models in terms of AIC scores. When conducting a likelihood ratio test, we found the added complexity to significantly improve log-likelihood scores (χ² (2) = 346.41, p < .001). 
-```{r}
-summary(model_5.2d)
+summary(model_5.2e)$coefficients
 inv.logit(0.83316)
 ```
-    Accuracy is found to be significantly modulated by the number of target frames (beta = 0.83316, SE = 0.04432, p < .001); with each increase in the number of target frames, the probability of a correct answer increases by 69.7%.
-```{r}
-df <- cbind(df, fitted = fitted(model_5.2d), probabilities = inv.logit(fitted(model_5.2d)))
-ggplot(df, aes(x = target.frames, y = probabilities, color = subject)) + 
-  geom_line() +
-  xlim(0, 8) +
-  labs(x = "Number of target frames",
-       y = "Probability of correct answer",
-       title = "Estimated function by subject") +
-  scale_color_discrete(name = "Subject")
-```
-    ii. also include in the results section whether the fit didn't look good for any of the subjects. If so, identify those subjects in the report, and judge (no statistical test) whether their performance (accuracy) differed from that of the other subjects. Was their performance better than chance? (Use a statistical test this time) (50 %)
-    As seen in the above plot, the estimated function for subject 24 appears to differ from the other subjects, showing an apparently more linear relationship between accuracy and the number of target frames. They appear to demonstrate lower accuracy compared to the other subjects.
+
+(REPORT PART 1)
+
+We chose model_5.2e in order to best describe the probability of obtaining a correct answer in the task when taking into account the number of target frames presented, as well as unique intercepts by subject and unique slopes by target frames presented (correlation between random effects included):
+  
+  _correct ~ target.frames + (1 + target.frames | subject)_
+
+The chosen model performs better than the other models in terms of AIC scores. When conducting a log-likelihood ratio test, we found the added complexity to significantly improve log-likelihood scores (χ² (1) = 22.926, p < .001). 
+
+Accuracy is found to be significantly modulated by the number of target frames (beta = 0.833, SE = 0.044, p < .001); with each increase in the number of target frames, the probability of a correct answer increases by 69.7%.
+
+**ii. also include in the results section whether the fit didn't look good for any of the subjects. If so, identify those subjects in the report, and judge (no statistical test) whether their performance (accuracy) differed from that of the other subjects. Was their performance better than chance? (Use a statistical test this time)**
+
 ```{r}
 #isolate unruly subject
 sub24 <- df %>% 
@@ -225,22 +206,45 @@ sub24 <- df %>%
 table(sub24$correct) #see how many correct and incorrect answers
 vector <- c(496, 378) #establish vector of length 2 with number of correct and incorrect answers, respectively
 binom.test(vector, p = 0.5)
-#BUT IS 50% ENOUGH AS CHANCE, SHOULD IT BE 55%??
 ```
-    When running a binomial test on the data of subject 24, we found that their performance, albeit poor, to be significantly better than chance when the level of chance is determined to be a 50% success rate.
-3) Now add _pas_ to the group-level effects - if a log-likelihood ratio test justifies this, also add the interaction between _pas_ and _target.frames_ and check whether a log-likelihood ratio test justifies this
+
+(REPORT PART 2)
+
+```{r, echo = FALSE}
+df <- cbind(df, fitted = fitted(model_5.2e), probabilities = inv.logit(fitted(model_5.2e)))
+ggplot(df, aes(x = target.frames, y = probabilities, color = subject)) + 
+  geom_line() +
+  xlim(0, 8) +
+  labs(x = "Number of target frames",
+       y = "Probability of correct answer",
+       title = "Estimated function by subject") +
+  scale_color_discrete(name = "Subject") +
+  theme_minimal()
+```
+
+However, as seen in the above plot, the estimated function for subject 24 appears to differ from the other subjects, showing an apparently more linear relationship between accuracy and the number of target frames. They appear to demonstrate lower accuracy compared to the other subjects. When conducting a binomial test on the data for this subject, we found that their performance, albeit poor, to be significantly better than chance, b(874), p < .001.
+
+### 3) Now add _pas_ to the group-level effects - if a log-likelihood ratio test justifies this, also add the interaction between _pas_ and _target.frames_ and check whether a log-likelihood ratio test justifies this
 ```{r}
 # Establish models
-model_5.2e <- glmer(correct ~ target.frames + pas + (target.frames | subject), 
+model_5.2f <- glmer(correct ~ target.frames + pas + (target.frames | subject), 
                     family = 'binomial', 
                     data = df)
-model_5.2f <- glmer(correct ~ target.frames * pas + (target.frames | subject), 
+model_5.2g <- glmer(correct ~ target.frames * pas + (target.frames | subject), 
                     family = 'binomial', 
                     data = df,
                     control = glmerControl(optimizer = "bobyqa")) #model wasn't converging so it had to be optimized
+
+# Log-likelihood ratio test
+anova(model_5.2g, model_5.2f, model_5.2e)
 ```
-    i. if your model doesn't converge, try a different optimizer  
-    ii. plot the estimated group-level functions over `xlim=c(0, 8)` for each of the four PAS-ratings - add this plot to your report (see: 5.2.i) and add a description of your chosen model. Describe how _pas_ affects accuracy together with target duration if at all. Also comment on the estimated functions' behavior at target.frame=0 - is that behaviour reasonable?
+
+The most complex model performs better than the other models in terms of AIC scores. When conducting a likelihood ratio test, we also found the added complexity to significantly improve log-likelihood scores (χ² (3) = 379.58, p < .001).
+
+**i. if your model doesn't converge, try a different optimizer**  
+
+**ii. plot the estimated group-level functions over `xlim=c(0, 8)` for each of the four PAS-ratings - add this plot to your report (see: 5.2.i) and add a description of your chosen model. Describe how _pas_ affects accuracy together with target duration if at all. Also comment on the estimated functions' behavior at target.frame = 0 - is that behaviour reasonable?**
+
 ```{r}
 df <- cbind(df, fitted_f = fitted(model_5.2f), probabilities_f = inv.logit(fitted(model_5.2f)))
 ggplot(df, aes(x = target.frames, y = probabilities_f, color = subject)) + 
@@ -258,7 +262,7 @@ ggplot(df, aes(x = target.frames, y = probabilities_f, color = subject)) +
 # Test log-likelihood ratios
 anova(model_5.2f, model_5.2e, model_5.2d)
 ```
-    The chosen model performs better than the other models in terms of AIC scores. When conducting a likelihood ratio test, we found the added complexity to significantly improve log-likelihood scores (χ² (3) = 379.58, p < .001).
+
 ```{r}
 summary(model_5.2f)
 ```
