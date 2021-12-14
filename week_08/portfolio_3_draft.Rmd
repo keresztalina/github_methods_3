@@ -54,7 +54,7 @@ data = np.load('megmag_data.npy') # load data
 **i. The data is a 3-dimensional array. The first dimension is number of repetitions of a visual stimulus , the second dimension is the number of sensors that record magnetic fields (in Tesla) that stem from neurons activating in the brain, and the third dimension is the number of time samples. How many repetitions, sensors and time samples are there?** 
     ```{python}
 data.shape # show shape of data; it is a téglatest!!!
-# BASICALLY what you have is a big cube of values that are ONLY THE MEASUREMENTS. So far, the variables 'repetition', 'sensor' and 'timestamp' are only implied - they have not been created.
+# BASICALLY what you have is a big cube of values that are ONLY THE MEASUREMENTS
 ```
 
 There are 682 repetitions, 102 sensors and 251 timestamps.
@@ -230,14 +230,14 @@ X_1_2 = np.reshape(data_1_2, (shape[0], time_by_sensor)) # 1st dimension intact,
 
 **iii. Import the `StandardScaler` and scale `X_1_2`**  
 ```{python}
-sc = StandardScaler() # assign a class to an object so it can take on a function and possess certain attributes
+sc = StandardScaler() 
 X_1_2_std = sc.fit_transform(X_1_2) # standardize the data through gradient descent; it should have mean 0 and standardized format
 ```
 
 **iv. Do a standard `LogisticRegression` - can be imported from `sklearn.linear_model` - make sure there is no `penalty` applied**
 ```{python}
 # don't we need to split the dataset into train and test lol
-logR = LogisticRegression(penalty = 'none') # assign a class to an object so it can take on a function and possess certain attributes
+logR = LogisticRegression(penalty = 'none') 
 model_2_1a = logR.fit(X_1_2_std, y_1_2) # fit the model based on scaled X and y
 # This is essentially a logistic regression with 25602 coefficients/weights - we have that many variables
 # model_2_1a.coef_[0, 1212] # the model is a nested list; you take list number 0, and item number 1212
@@ -532,7 +532,7 @@ svm_rbf = SVC(kernel = 'rbf') #radial basis function
 svm_rbf_fit = svm_rbf.fit(X_train_std, y_train)
 predictions = svm_rbf.predict(X_test_std)
 ```
-    ii. Create a _confusion matrix_. It is a 4x4 matrix. The row names and the column names are the PAS-scores. There will thus be 16 entries. The PAS1xPAS1 entry will be the number of actual PAS1, $y_{pas1}$ that were predicted as PAS1, $\hat y_{pas1}$. The PAS1xPAS2 entry will be the number of actual PAS1, $y_{pas1}$ that were predicted as PAS2, $\hat y_{pas2}$ and so on for the remaining 14 entries.  Plot the matrix
+**ii. Create a _confusion matrix_. It is a 4x4 matrix. The row names and the column names are the PAS-scores. There will thus be 16 entries. The PAS1xPAS1 entry will be the number of actual PAS1, $y_{pas1}$ that were predicted as PAS1, $\hat y_{pas1}$. The PAS1xPAS2 entry will be the number of actual PAS1, $y_{pas1}$ that were predicted as PAS2, $\hat y_{pas2}$ and so on for the remaining 14 entries.  Plot the matrix**
     ```{python}
 cm = confusion_matrix(y_test, predictions)
 

@@ -178,7 +178,7 @@ plt.figure()
 sns.heatmap(covmat2, square = True) # makes sure the matrix is not all squishy squishy
 plt.show()
 ```
-    There is no longer any covariance between the dimensions off-diagonal (the vectors for each principal component have been multiplied by the sorted eigenvectors, yielding a dot product of 0). 
+There is no longer any covariance between the dimensions off-diagonal (the vectors for each principal component have been multiplied by the sorted eigenvectors, yielding a dot product of 0). 
 
 ## EXERCISE 2 - Use logistic regression with cross-validation to find the optimal number of principal components  
 ### 1) We are going to run logistic regression with in-sample validation (A.K.)
